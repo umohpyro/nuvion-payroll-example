@@ -4,6 +4,8 @@ A small payroll app that pays contractors in other countries through [Nuvion](ht
 
 Live demo: https://payroll.umoh.name.ng (bring your own sandbox key).
 
+> Independent demo. Sandbox only, no real payments. Not financial, tax or legal advice. Use fake details only.
+
 ## What it shows
 
 | Page | What it demonstrates | Nuvion calls |
