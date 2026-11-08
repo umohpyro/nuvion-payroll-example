@@ -72,6 +72,7 @@ export function SettingsForm({ connectedEntityId }: { connectedEntityId: string 
 
   return (
     <div className="space-y-6">
+      <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Use fake details only. Connect a sandbox key, never a live one.</p>
       <Card>
         <CardHeader>
           <CardTitle>1. Your sandbox API key</CardTitle>
