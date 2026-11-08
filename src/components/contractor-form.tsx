@@ -56,6 +56,7 @@ export function ContractorForm() {
         });
       }}
     >
+      <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Use fake details only. Names, bank and phone details are sent to your Nuvion sandbox.</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="c-first" label="First name"><Input id="c-first" value={profile.firstName} onChange={p("firstName")} maxLength={60} required /></Field>
         <Field id="c-last" label="Last name"><Input id="c-last" value={profile.lastName} onChange={p("lastName")} maxLength={60} required /></Field>
