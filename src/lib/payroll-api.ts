@@ -94,3 +94,11 @@ export async function paymentDetailFor(c: Contractor): Promise<string | null> {
   const r = await nuvion<List<PaymentDetail>>("GET", `/counterparties/${c.id}/payment-details?entity_id=${await entityId()}&limit=100`);
   return r.data.find((p) => p.payment_method === "bank-transfer" && p.currency === CORRIDORS[c.corridor].currency)?.id ?? null;
 }
+
+/** The contractor a pay-run row refers to: same name, corridor and last four digits, else a new one. Retrying a run therefore never creates a second contractor. */
+export async function ensureContractor(n: NewContractor): Promise<Contractor> {
+  const name = `${n.firstName} ${n.lastName}`;
+  const tail = last4(n.corridor, n.routing);
+  const found = (await listContractors()).find((c) => c.name === name && c.corridor === n.corridor && c.last4 === tail);
+  return found ?? createContractor(n);
+}

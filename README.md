@@ -13,6 +13,8 @@ Live demo: https://payroll.umoh.name.ng (bring your own sandbox key).
 | Overview `/` | Account balances, contractor count, recent payments | `GET /accounts`, `GET /counterparties`, `GET /transfers` |
 | Contractors `/contractors` | A contractor is an individual counterparty plus a bank payment detail, validated per rail | `POST /counterparties`, `POST /payment-details`, `GET /bank-codes/NG` |
 | Pay `/pay` | One FX quote per contractor, the amount they receive, a countdown, then pay one or a batch | `POST /fx-quotes`, `GET /fx-quotes/{id}`, `POST /transfers` (`bank-transfer` with `fx_quote_id`) |
+| Upload `/pay/upload` | Pay a run from a CSV: rows are validated in the browser and again on the server, per-row errors show before anything is sent, then one FX quote and one transfer per valid row. A sample CSV is downloadable | `POST /fx-quotes`, `POST /counterparties`, `POST /payment-details`, `POST /transfers` |
+| People `/people` | Each person's latest payout status across all runs | `GET /counterparties`, `GET /transfers` |
 | Payments `/payments` | Payment list and a timeline per payment | `GET /transfers`, `GET /transfers/{id}` |
 | Settings `/settings` | Bring your own key: look up your approved entities and connect one | `GET /entities`, `GET /accounts` |
 
@@ -50,6 +52,8 @@ Open http://localhost:3000/settings, paste your sandbox API key (from the sandbo
 Run against `https://api.nuvion.dev` in other Nuvion examples: FX quotes and the counterparty, payment detail and transfer calls work, but bank payouts do not settle. A payout is created as `new`, then ends `failed` within seconds (for example with `invalid_payment_request`), and the `applicable_fee` it reports is not debited. So the timeline for a sandbox payment normally ends at **Failed** with Nuvion's reason, and the app shows that as it is. This repository has not been run end to end with a real key.
 
 ## Things to know
+
+- **CSV runs are safe to retry.** Each uploaded file gets a run ID, and every transfer reference is `payroll-run-<run ID>-<line>`. Nuvion rejects a repeated `unique_reference` with `error_duplicate_resource`, so sending the same run twice cannot pay anyone twice. Contractors are found by name, currency and last four digits before one is created.
 
 - **A quote locks one rate for a short window and can be used once.** `valid_for` varies per quote, so the page counts down from `quote.expires_at`.
 - **Amounts are integers in the smallest unit,** so `1250` is 12.50. Typed amounts are parsed once, at the edge.

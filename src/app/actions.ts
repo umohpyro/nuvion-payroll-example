@@ -7,8 +7,10 @@ import { ConfigError } from "@/lib/env";
 import { UserError } from "@/lib/errors";
 import { formatAmount } from "@/lib/money";
 import { NuvionError, nuvion, type ApiTransfer, type BankCode, type FxQuote } from "@/lib/nuvion";
+import { parseRun, type ParsedRow } from "@/lib/csv";
+import { isRunId, runReference } from "@/lib/people";
 import { planBatch, referenceFor, type BatchResult } from "@/lib/payroll";
-import { createContractor, getQuoteById, listAccounts, listContractors, paymentDetailFor } from "@/lib/payroll-api";
+import { createContractor, ensureContractor, getQuoteById, listAccounts, listContractors, paymentDetailFor } from "@/lib/payroll-api";
 
 /*
  * Server Actions are public POST endpoints, so every input is validated here. The browser sends IDs and typed
@@ -182,6 +184,102 @@ export async function payBatch(input: z.input<typeof paySchema>) {
         });
         remaining -= quote.amount_from + t.applicable_fee;
         results.push({ contractorId: c.id, ok: true, transferId: t.id });
+      } catch (e) {
+        fail(e instanceof NuvionError ? friendly(e) : "Something went wrong.");
+      }
+    }
+    return { results };
+  });
+}
+
+/* ---------------- CSV pay run ---------------- */
+
+const csvText = z.string().max(100_000, "This file is too large.");
+const runQuotesSchema = z.object({ accountId: id, csv: csvText });
+const runPaySchema = z.object({ accountId: id, runId: z.string().refine(isRunId, "Invalid run."), csv: csvText, items: z.array(z.object({ line: z.number().int().min(2).max(100), quoteId: id })).min(1).max(20) });
+
+/** Re-validates the file on the server: the browser's preview is a convenience, not a check this code can rely on. */
+function validRows(csv: string): ParsedRow[] {
+  try {
+    return parseRun(csv);
+  } catch (e) {
+    throw new UserError((e as Error).message);
+  }
+}
+
+export type RunQuote = { line: number } & ({ ok: true; quote: QuoteView } | { ok: false; error: string });
+
+/** One FX quote per valid row. Nothing is created in Nuvion except the quotes, so a person can still back out. */
+export async function quoteRun(input: z.input<typeof runQuotesSchema>) {
+  return guard(async () => {
+    const v = runQuotesSchema.parse(input);
+    const rows = validRows(v.csv).flatMap((r) => (r.row ? [{ line: r.line, row: r.row }] : []));
+    if (rows.length === 0) throw new UserError("No valid rows to pay. Fix the errors in the file first.");
+    const [accounts, entity] = await Promise.all([listAccounts(), getConfig().then((c) => c.entityId)]);
+    const account = accounts.find((a) => a.id === v.accountId);
+    if (!account) throw new UserError("Choose an account to pay from.");
+    const total = rows.reduce((s, r) => s + r.row.minor, 0);
+    if (total > account.balance.available) throw new UserError(`The valid rows total ${formatAmount(total, account.currency)} but ${formatAmount(account.balance.available, account.currency)} is available.`);
+
+    const quotes: RunQuote[] = await Promise.all(
+      rows.map(async ({ line, row }): Promise<RunQuote> => {
+        const to = CORRIDORS[row.corridor].currency;
+        if (to === account.currency) return { line, ok: false, error: `This account is in ${to}. Pick an account in another currency.` };
+        try {
+          const q = await nuvion<FxQuote>("POST", "/fx-quotes", { entity_id: entity, from_currency: account.currency, to_currency: to, amount_from: row.minor, account_id: account.id });
+          return { line, ok: true, quote: { id: q.id, rate: q.rate, amountFrom: q.amount_from, amountTo: q.amount_to, toCurrency: q.to, expiresAt: q.quote.expires_at } };
+        } catch (e) {
+          return { line, ok: false, error: e instanceof NuvionError ? friendly(e) : "Could not get a quote." };
+        }
+      }),
+    );
+    return { quotes };
+  });
+}
+
+export type RunResult = { line: number } & ({ ok: true; transferId: string } | { ok: false; error: string });
+
+/**
+ * Pays the quoted rows of a run. The transfer reference is "payroll-run-<runId>-<line>", fixed for the run, so
+ * resending the same run (a double click, a retry after a timeout) returns error_duplicate_resource instead of paying twice.
+ * Nuvion's transfer idempotency is `unique_reference`; the contractor is found or created first, never created twice.
+ */
+export async function payRun(input: z.input<typeof runPaySchema>) {
+  return guard(async () => {
+    const v = runPaySchema.parse(input);
+    const parsed = new Map(validRows(v.csv).map((r) => [r.line, r]));
+    const [accounts, entity] = await Promise.all([listAccounts(), getConfig().then((c) => c.entityId)]);
+    const account = accounts.find((a) => a.id === v.accountId);
+    if (!account) throw new UserError("Choose an account to pay from.");
+    let remaining = account.balance.available;
+    const results: RunResult[] = [];
+
+    for (const item of v.items) {
+      const fail = (error: string) => void results.push({ line: item.line, ok: false, error });
+      try {
+        const row = parsed.get(item.line)?.row;
+        if (!row) { fail("This row has errors and was not paid."); continue; }
+        const quote = await getQuoteById(item.quoteId);
+        if (quote.quote.status !== "active") { fail("The quote expired or was already used. Get new quotes."); continue; }
+        if (quote.from !== account.currency || quote.to !== CORRIDORS[row.corridor].currency || quote.amount_from !== row.minor) { fail("The quote does not match this row. Get new quotes."); continue; }
+        if (quote.amount_from > remaining) { fail(`Only ${formatAmount(remaining, account.currency)} is left for this payment.`); continue; }
+        const c = await ensureContractor(row);
+        const detail = await paymentDetailFor(c);
+        if (!detail) { fail("This person has no bank details in this currency."); continue; }
+        const t = await nuvion<ApiTransfer>("POST", "/transfers", {
+          entity_id: entity,
+          account_id: account.id,
+          payment_detail_id: detail,
+          counterparty_id: c.id,
+          amount: quote.amount_from,
+          currency: account.currency,
+          narration: `Contractor payment: ${c.name}`,
+          payment_type: "bank-transfer",
+          unique_reference: runReference(v.runId, item.line),
+          fx_quote_id: quote.id,
+        });
+        remaining -= quote.amount_from + t.applicable_fee;
+        results.push({ line: item.line, ok: true, transferId: t.id });
       } catch (e) {
         fail(e instanceof NuvionError ? friendly(e) : "Something went wrong.");
       }
