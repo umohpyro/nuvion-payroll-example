@@ -24,7 +24,8 @@ async function Pay() {
   if (contractors.length === 0) return <p className="text-sm text-muted-foreground">Add a contractor first on the <Link href="/contractors" className="underline underline-offset-4">Contractors</Link> page.</p>;
   if (funded.length === 0) return <p className="text-sm text-muted-foreground">None of this entity&apos;s accounts has an available balance. Fund an account in your sandbox dashboard, then come back.</p>;
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-3xl space-y-4">
+      <p className="text-sm text-muted-foreground">Paying many people? <Link href="/pay/upload" className="font-semibold text-pink-text underline underline-offset-4">Upload a CSV pay run</Link>.</p>
       <PayForm
         accounts={funded.map((a) => ({ id: a.id, label: a.display_name, currency: a.currency, availableMinor: a.balance.available }))}
         contractors={contractors.map((c) => ({ id: c.id, name: c.name, corridor: c.corridor, bank: c.bank, last4: c.last4 }))}
