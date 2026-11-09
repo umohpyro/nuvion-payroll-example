@@ -27,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <SiteHeader />
         </Suspense>
         <main className="flex-1">{children}</main>
-        <footer className="border-t py-8 text-center text-sm text-muted-foreground">
+        <footer className="border-t pt-8 pb-28 text-center text-sm text-muted-foreground md:pb-8">
           <p className="mx-auto max-w-3xl px-4">Independent demo. Sandbox only, no real payments. Not financial, tax or legal advice.</p>
           <p className="mx-auto mt-2 max-w-3xl px-4">Your API key is sealed in an encrypted cookie in this browser and expires after eight hours. <Link href="/privacy" className="underline underline-offset-4">Privacy</Link></p>
         </footer>

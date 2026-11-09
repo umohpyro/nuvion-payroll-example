@@ -16,6 +16,17 @@
   --color-band: var(--band);
   --color-band-foreground: var(--band-foreground);
   --color-sand-fixed: var(--sand-fixed);
+  --color-c: var(--c);
+  --color-c-foreground: var(--c-foreground);
+  --color-c-soft: var(--c-soft);
+  --color-c-text: var(--c-text);
+  --color-cat-pink: var(--cat-pink);
+  --color-cat-coral: var(--cat-coral);
+  --color-cat-plum: var(--cat-plum);
+  --color-cat-teal: var(--cat-teal);
+  --color-cat-blue: var(--cat-blue);
+  --color-cat-green: var(--cat-green);
+  --color-cat-brown: var(--cat-brown);
   --shadow-card: var(--shadow);
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -70,6 +81,17 @@
   --band-foreground: #f4f2f2;
   --sand-fixed: #f6dcd5;          /* sand on dark bands in both themes */
   --shadow: 0 18px 44px -24px rgba(48, 4, 2, 0.4);
+  --c: #8e3fa8;                   /* Payroll category colour (plum): hero band, active nav, links, ledger accents */
+  --c-foreground: #ffffff;        /* 6:1 on plum */
+  --c-soft: #f3e6f7;              /* plum tint: run totals, drop zone */
+  --c-text: #8e3fa8;              /* plum as text on light grounds, AA */
+  --cat-pink: #f63080;            /* avatar circles: one hue per person, picked from the name */
+  --cat-coral: #e8590c;
+  --cat-plum: #8e3fa8;
+  --cat-teal: #0e8f83;
+  --cat-blue: #2f6fe0;
+  --cat-green: #2e9e4f;
+  --cat-brown: #a8531c;
 }
 
 /* Dark is designed with light: the same tokens on an Earth-tinted ground. */
@@ -94,6 +116,15 @@
   --warn: #ffb38a;
   --band: #0f0302;
   --shadow: 0 18px 44px -24px rgba(0, 0, 0, 0.8);
+  --c-soft: #3a1a44;
+  --c-text: #dcaaec;              /* plum text on the Earth-tinted dark ground */
+}
+
+/* Ledger-paper hero: faint rules over a plum-to-Earth gradient. */
+.ledger-hero {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 31px, color-mix(in oklab, var(--band-foreground) 7%, transparent) 31px 32px),
+    linear-gradient(135deg, var(--c) 0%, var(--band) 78%);
 }
 
 @layer base {

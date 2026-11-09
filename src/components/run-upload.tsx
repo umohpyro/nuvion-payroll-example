@@ -1,13 +1,15 @@
 "use client";
 
+import { CircleAlert, CircleCheck, FileUp } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { payRun, quoteRun, type RunQuote, type RunResult } from "@/app/actions";
-import type { AccountOption } from "@/components/pay-form";
+import { Ledger, LedgerRow } from "@/components/ledger";
 import { NativeSelect } from "@/components/native-select";
+import type { AccountOption } from "@/components/pay-form";
+import { RunProgress } from "@/components/run-progress";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MAX_BYTES, parseRun, type ParsedRow } from "@/lib/csv";
 import { formatAmount } from "@/lib/money";
@@ -22,6 +24,7 @@ export function RunUpload({ accounts }: { accounts: AccountOption[] }) {
   const [file, setFile] = useState<{ name: string; csv: string; runId: string } | null>(null);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [over, setOver] = useState(false);
   const [quotes, setQuotes] = useState<RunQuote[] | null>(null);
   const [results, setResults] = useState<RunResult[] | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -40,6 +43,7 @@ export function RunUpload({ accounts }: { accounts: AccountOption[] }) {
   const good = (quotes ?? []).flatMap((q) => (q.ok ? [{ line: q.line, quote: q.quote }] : []));
   const expired = good.some((g) => secondsLeft(g.quote.expiresAt, now) === 0);
   const valid = (rows ?? []).filter((r) => r.row).length;
+  const totalMinor = (rows ?? []).reduce((s, r) => s + (r.row?.minor ?? 0), 0);
   const reset = () => { setQuotes(null); setResults(null); };
 
   async function load(f: File | undefined) {
@@ -56,22 +60,29 @@ export function RunUpload({ accounts }: { accounts: AccountOption[] }) {
   }
 
   if (results && file) {
-    const paid = results.filter((r) => r.ok).length;
+    const sent = results.filter((r) => r.ok).length;
     return (
       <div className="space-y-4" aria-live="polite">
-        <p className="text-lg font-bold">{paid} submitted{results.length - paid ? `, ${results.length - paid} not submitted` : ""}</p>
-        <p className="text-sm text-muted-foreground">Submitted means Nuvion accepted the transfer. Follow each person on the People page until the payout is paid or failed.</p>
-        <ul className="divide-y rounded-xl border bg-card text-sm">
+        <section className="rounded-[22px] bg-card p-4 shadow-card ring-1 ring-foreground/10 sm:p-5">
+          <h2 className="text-[0.72rem] font-bold tracking-[0.12em] text-c-text uppercase">Run submitted</h2>
+          <p className="mt-1 mb-3 text-2xl font-extrabold">{sent} submitted{results.length - sent ? `, ${results.length - sent} not submitted` : ""}</p>
+          <RunProgress paid={0} pending={sent} failed={results.length - sent} pendingLabel="Submitted" />
+          <p className="mt-3 text-sm text-muted-foreground">Submitted means Nuvion accepted the transfer. Follow each person on the People page until the payout is paid or failed.</p>
+        </section>
+        <Ledger title="Result per person" count={`${results.length}`}>
           {results.map((r) => (
-            <li key={r.line} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <span className="font-medium">{nameOf(r.line)}</span>
-              {r.ok ? <Link href={`/payments/${r.transferId}`} className="font-semibold text-pink-text underline underline-offset-4">View payment</Link> : <span className="text-destructive">{r.error}</span>}
-            </li>
+            <LedgerRow
+              key={r.line}
+              name={nameOf(r.line)}
+              sub={`Line ${r.line}`}
+              tone={r.ok ? "warn" : "bad"}
+              right={r.ok ? <Link href={`/payments/${r.transferId}`} className="font-semibold text-c-text underline underline-offset-4">View payment</Link> : <span className="max-w-48 text-right text-destructive">{r.error}</span>}
+            />
           ))}
-        </ul>
+        </Ledger>
         <div className="flex flex-wrap gap-3">
           <Link href="/people" className="inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground">People</Link>
-          <Button variant="outline" onClick={() => { setFile(null); setRows(null); reset(); }}>Upload another run</Button>
+          <Button variant="outline" className="h-11 rounded-full px-5" onClick={() => { setFile(null); setRows(null); reset(); }}>Upload another run</Button>
         </div>
       </div>
     );
@@ -79,10 +90,22 @@ export function RunUpload({ accounts }: { accounts: AccountOption[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5">
-        <Label htmlFor="run-file">CSV file</Label>
-        <Input id="run-file" type="file" accept=".csv,text/csv" onChange={(e) => void load(e.target.files?.[0])} />
-        {problem && <p role="alert" className="text-sm text-destructive">{problem}</p>}
+      <div>
+        <label
+          htmlFor="run-file"
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); void load(e.dataTransfer.files[0]); }}
+          className={`flex cursor-pointer flex-col items-center gap-2 rounded-[22px] border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50 ${over ? "border-c bg-c-soft" : rows ? "border-ok/60 bg-card" : problem ? "border-destructive/70 bg-card" : "border-c/50 bg-c-soft/60 hover:bg-c-soft"}`}
+        >
+          <span className={`grid size-12 place-items-center rounded-full text-c-foreground ${rows ? "bg-ok" : problem ? "bg-destructive" : "bg-c"}`}>
+            {rows ? <CircleCheck className="size-6" aria-hidden /> : problem ? <CircleAlert className="size-6" aria-hidden /> : <FileUp className="size-6" aria-hidden />}
+          </span>
+          <span className="font-extrabold">{file ? file.name : "Drop your CSV here"}</span>
+          <span className="text-sm text-muted-foreground">{file ? "Choose another file to replace it" : "or choose a file. Up to 20 rows, 100 KB."}</span>
+          <input id="run-file" type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void load(e.target.files?.[0])} />
+        </label>
+        {problem && <p role="alert" className="mt-2 text-sm font-semibold text-destructive">{problem}</p>}
       </div>
 
       {rows && file && (
@@ -94,16 +117,32 @@ export function RunUpload({ accounts }: { accounts: AccountOption[] }) {
             </NativeSelect>
           </div>
 
-          <p className="text-sm"><strong>{file.name}</strong>: {valid} of {rows.length} row{rows.length === 1 ? "" : "s"} valid. {valid < rows.length && "Rows with errors are skipped; fix the file and upload it again to include them."}</p>
-          <ul className="divide-y rounded-xl border bg-card">
+          <Ledger
+            title="Pay run"
+            count={`${valid} of ${rows.length} valid`}
+            total={account && (
+              <>
+                <span>
+                  <span className="block text-[0.72rem] font-bold tracking-[0.12em] text-c-text uppercase">Run total</span>
+                  {totalMinor > account.availableMinor && <span className="block text-xs font-semibold text-destructive">More than the {formatAmount(account.availableMinor, account.currency)} available</span>}
+                </span>
+                <span className="text-2xl font-extrabold tabular-nums">{formatAmount(totalMinor, account.currency)}</span>
+              </>
+            )}
+          >
             {rows.map((r) => {
               const q = quotes?.find((x) => x.line === r.line);
               return (
-                <li key={r.line} className="space-y-1 px-4 py-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold">{r.row ? nameOf(r.line) : `Line ${r.line}`} <span className="font-normal text-muted-foreground">line {r.line}</span></span>
-                    {r.row ? <span className="tabular-nums">{account ? formatAmount(r.row.minor, account.currency) : ""} to {r.row.corridor}</span> : <span className="font-semibold text-destructive">Not valid</span>}
-                  </div>
+                <LedgerRow
+                  key={r.line}
+                  name={r.row ? nameOf(r.line) : `Line ${r.line}`}
+                  title={r.row ? nameOf(r.line) : `Line ${r.line}`}
+                  sub={r.row ? `Line ${r.line} · to ${r.row.corridor}` : "Skipped until the file is fixed"}
+                  tone={r.row ? (q && !q.ok ? "bad" : "ok") : "bad"}
+                  right={r.row
+                    ? <span className="font-bold tabular-nums">{account ? formatAmount(r.row.minor, account.currency) : ""}</span>
+                    : <span className="flex items-center gap-1 font-semibold text-destructive"><CircleAlert className="size-4" aria-hidden />Not valid</span>}
+                >
                   {r.errors.map((e) => <p key={e} className="text-destructive">{e}</p>)}
                   {q?.ok && (
                     <p className="rounded-lg bg-secondary px-3 py-2">
@@ -112,10 +151,11 @@ export function RunUpload({ accounts }: { accounts: AccountOption[] }) {
                     </p>
                   )}
                   {q && !q.ok && <p className="text-destructive">{q.error}</p>}
-                </li>
+                </LedgerRow>
               );
             })}
-          </ul>
+          </Ledger>
+          {valid < rows.length && <p className="text-sm text-muted-foreground">Rows with errors are skipped. Fix the file and upload it again to include them.</p>}
 
           <Button
             size="lg"
