@@ -50,7 +50,7 @@ export function PayForm({ accounts, contractors }: { accounts: AccountOption[]; 
           {results.map((r) => (
             <li key={r.contractorId} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
               <span className="font-medium">{name(r.contractorId)}</span>
-              {r.ok ? <Link href={`/payments/${r.transferId}`} className="font-semibold text-pink-text underline underline-offset-4">View payment</Link> : <span className="text-destructive">{r.error}</span>}
+              {r.ok ? <Link href={`/payments/${r.transferId}`} className="font-semibold text-c-text underline underline-offset-4">View payment</Link> : <span className="text-destructive">{r.error}</span>}
             </li>
           ))}
         </ul>
