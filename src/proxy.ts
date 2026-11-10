@@ -7,4 +7,4 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(new URL("/settings", request.url));
 }
 
-export const config = { matcher: ["/((?!settings|privacy|_next/static|_next/image|favicon.ico).*)"] };
+export const config = { matcher: ["/((?!settings|privacy|opengraph-image|_next/static|_next/image|favicon.ico).*)"] };
